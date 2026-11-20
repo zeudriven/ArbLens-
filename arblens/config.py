@@ -44,7 +44,10 @@ class Settings:
     # Kalshi's published taker fee: ceil(0.07 x C x P x (1-P)), scaled by each series' fee_multiplier.
     kalshi_base_fee_rate: float = float(os.getenv("ARBLENS_KALSHI_FEE_RATE", "0.07"))
 
-    db_path: Path = Path(os.getenv("ARBLENS_DB", str(ROOT / "data" / "arblens.db")))
+    # On Vercel only /tmp is writable, and it is wiped between cold starts, so paper trades there
+    # are temporary until a hosted database (e.g. Supabase Postgres) replaces SQLite.
+    db_path: Path = Path(os.getenv("ARBLENS_DB") or (
+        "/tmp/arblens.db" if os.getenv("VERCEL") else str(ROOT / "data" / "arblens.db")))
     starting_cash: float = float(os.getenv("ARBLENS_STARTING_CASH", "1000"))
 
     # Optional AI rules check. Leave ANTHROPIC_API_KEY unset to run without it.

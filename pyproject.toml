@@ -1,0 +1,15 @@
+[project]
+name = "arblens"
+version = "0.2.0"
+description = "Kalshi vs Polymarket price-gap scanner with paper trading"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "anthropic>=2.0",
+]
+
+# Tells Vercel's FastAPI preset where the app lives (it isn't in app.py/main.py at the root).
+[tool.vercel]
+entrypoint = "arblens.server:app"
