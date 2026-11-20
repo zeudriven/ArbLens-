@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArbLens Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: an audit of "free money", read by an interviewer in a screen share
+   IDEA an auditor's report on price gaps: every gap is tested against fees, then the fine print
+   PICTURE dumbbell rows: gross gap shrinking to net edge, each tagged with its verdict
+   COLOUR white ground, ink #101418, one yellow slab behind the key figure, blue for true arbs, burnt orange for rule risk, slate for gaps lost to fees
+   TYPE Manrope 800 for titles and figures, Manrope for text
+   LAYOUT finding and key figures across the top, dumbbell chart full width, then detail, calculator, pipeline, plan, energy version */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#101418);--ink:light-dark(#101418,#e8ecf0);--slate:light-dark(#5b6672,#9aa4af);--line:light-dark(#e3e7eb,#262d35);--panel:light-dark(#f5f7f9,#171d24);--yellow:#ffd84a;--blue:light-dark(#1f5fd6,#6e9cff);--risk:light-dark(#c2410c,#ff8a4c);--lost:light-dark(#8a94a0,#6b7580)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Manrope,system-ui,sans-serif;overflow-x:clip}
+.band{padding-block:clamp(28px,4vw,56px);padding-inline:max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em;line-height:1.08;margin:0}
+h1{font-size:clamp(32px,4.6vw,50px);text-wrap:balance;max-width:20ch}
+h2{font-size:clamp(26px,3vw,34px);text-wrap:balance;margin-bottom:8px}
+h3{font-size:19px;margin-bottom:6px}
+p{margin:0 0 10px;max-width:68ch}
+.muted{color:var(--slate)}
+.note{font-size:13px;color:var(--slate)}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center;padding:10px max(5vw,16px)}
+nav b{font-weight:800;margin-right:8px}
+nav a{color:var(--ink);text-decoration:none;font-size:14px;font-weight:600;padding:6px 0}
+nav a:hover{color:var(--blue)}
+.top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:22px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.kpi{padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+.kpi.key{background:var(--yellow);border-color:var(--yellow);color:#101418}
+.kpi .n{font-size:clamp(28px,3.4vw,40px);font-weight:800;line-height:1;white-space:nowrap}
+.kpi .l{font-size:13px;margin-top:6px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;margin:6px 0 12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.rows{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:minmax(0,15rem) minmax(0,1fr) 9.5rem;gap:14px;align-items:center;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-inline:0;border-top:0;width:100%;text-align:left;color:inherit;font:inherit;min-height:44px}
+.row:hover,.row.on{background:var(--panel)}
+.row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.q{font-size:14px;font-weight:600;line-height:1.3}
+.track{position:relative;height:26px}
+.axis0{position:absolute;top:0;bottom:0;width:1px;background:var(--slate);opacity:.5}
+.bar{position:absolute;top:12px;height:2px;background:var(--slate);opacity:.5}
+.gross,.net{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;margin-left:-7px}
+.gross{border:2px solid var(--slate);background:var(--bg)}
+.vals{font-size:13px;white-space:nowrap;text-align:right}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff;white-space:nowrap}
+.scale{display:grid;grid-template-columns:minmax(0,15rem) minmax(0,1fr) 9.5rem;gap:14px;padding:4px 6px;font-size:12px;color:var(--slate)}
+.scale .ticks{position:relative;height:16px}
+.scale .ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h3 small{font-weight:600;color:var(--slate);font-size:13px}
+mark{background:color-mix(in srgb,var(--risk) 22%,transparent);color:inherit;padding:0 2px;border-radius:3px}
+.diffs{display:grid;gap:8px;margin:8px 0}
+.diff{border-left:3px solid var(--risk);padding:4px 10px;font-size:14px}
+.ok{color:var(--blue);font-weight:700}
+.bad{color:var(--risk);font-weight:700}
+pre{overflow-x:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12.5px;line-height:1.45;margin:8px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:700}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px;align-items:start}
+.inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:4px}
+input[type=number]{width:100%;font:16px Manrope,sans-serif;padding:10px;border:1px solid var(--slate);border-radius:8px;background:var(--bg);color:var(--ink);min-height:44px}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.btn{font:600 14px Manrope,sans-serif;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;min-height:44px}
+.btn:hover{border-color:var(--slate)}
+.result{border:1px solid var(--line);border-radius:12px;padding:18px}
+.big{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;white-space:nowrap}
+.slab{display:inline-block;background:var(--yellow);color:#101418;padding:6px 12px;border-radius:8px}
+.water{margin-top:14px;display:grid;gap:6px}
+.wrow{display:grid;grid-template-columns:9em minmax(0,1fr) 6.5em;gap:10px;align-items:center;font-size:14px}
+.wbar{height:14px;border-radius:3px}
+.wrow .v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:14px 0}
+.stn{flex:1 1 150px;border:1px solid var(--line);border-radius:10px;padding:12px;position:relative}
+.stn .who{font-size:12px;font-weight:800;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:6px}
+.who.code{background:var(--panel);border:1px solid var(--line)}
+.who.ai{background:var(--yellow);color:#101418}
+.stn b{display:block;font-size:15px;margin-bottom:4px}
+.stn p{font-size:14px;margin:0;color:var(--slate)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+.scroll{overflow-x:auto}
+.cell-diff{background:color-mix(in srgb,var(--risk) 16%,transparent);font-weight:700}
+ul{margin:6px 0 0;padding-left:20px}
+li{margin-bottom:4px}
+footer{border-top:1px solid var(--line)}
+@media(max-width:900px){.top,.calc,.two,.detail{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){
+.row,.scale{grid-template-columns:minmax(0,1fr) 6.5rem}
+.row .track,.scale .ticks{grid-column:1/-1;grid-row:2}
+.scale>span:first-child{display:none}
+.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+.inputs{grid-template-columns:minmax(0,1fr)}
+table{font-size:13px}th,td{padding:6px 4px}
+.wrow{grid-template-columns:7em minmax(0,1fr) 5.5em}}
+@media(prefers-reduced-motion:no-preference){.net{transition:left .4s ease}}
+</style>
+</head>
+<body>
+<nav><div class="wrap"><b>ArbLens</b><a href="#scanner">Scanner</a><a href="#pair">Pair detail</a><a href="#margin">Margin calculator</a><a href="#how">How it works</a><a href="#plan">Evaluation plan</a><a href="#energy">Energy version</a></div></nav>
+
+<section class="band" id="scanner"><div class="wrap">
+<div class="top">
+<div>
+<h1 id="finding">Most "free money" gaps don't survive fees and the fine print</h1>
+<p class="muted">ArbLens matches the same event on Kalshi and Polymarket, takes out fees, then has an AI read both rulebooks. Read-only: it never trades.</p>
+</div>
+<div class="kpis" id="kpis"></div>
+</div>
+<div class="legend">
+<span><span class="dot" style="border:2px solid var(--slate)"></span>Gross gap</span>
+<span><span class="dot" style="background:var(--blue)"></span>Net edge: true arb</span>
+<span><span class="dot" style="background:var(--risk)"></span>Net edge: rules differ</span>
+<span><span class="dot" style="background:var(--lost)"></span>Gone after fees</span>
+</div>
+<div class="scale"><span>Event (100 contracts, before slippage)</span><div class="ticks" id="ticks"></div><span style="text-align:right">Net per contract</span></div>
+<div class="rows" id="rows"></div>
+<p class="note" style="margin-top:10px">Prototype with illustrative sample markets, prices and rule text. Not real quotes. Analysis only, not financial advice. Select a row to open its audit.</p>
+</div></section>
+
+<section class="band" id="pair" style="background:var(--panel)"><div class="wrap">
+<h2 id="pq">Pair detail</h2>
+<p class="muted" id="psum"></p>
+<div class="detail">
+<div class="card"><h3>Kalshi rules <small>market A</small></h3><p id="ra"></p></div>
+<div class="card"><h3>Polymarket rules <small>market B</small></h3><p id="rb"></p></div>
+</div>
+<div class="detail">
+<div class="card"><h3>What the AI flagged</h3><div class="diffs" id="diffs"></div><p class="note">Every quote is checked in code against the source text. A quote that isn't found sends the pair to human review.</p></div>
+<div class="card"><h3>Structured output <small>validated with Pydantic</small></h3><pre id="json"></pre></div>
+</div>
+</div></section>
+
+<section class="band" id="margin"><div class="wrap">
+<h2>Margin calculator</h2>
+<p class="muted">All money math runs in code, never in the AI. Load a sample pair or type your own prices.</p>
+<div class="presets" id="presets"></div>
+<div class="calc">
+<div class="inputs">
+<div><label for="pa">YES price on Kalshi (¢)</label><input id="pa" type="number" min="1" max="99" step="1" value="41"></div>
+<div><label for="pb">NO price on Polymarket (¢)</label><input id="pb" type="number" min="1" max="99" step="1" value="56"></div>
+<div><label for="qty">Contracts</label><input id="qty" type="number" min="1" step="1" value="100"></div>
+<div><label for="days">Days until resolution</label><input id="days" type="number" min="1" step="1" value="27"></div>
+<div><label for="kr">Kalshi fee rate (× P × (1−P))</label><input id="kr" type="number" min="0" step="0.01" value="0.07"></div>
+<div><label for="pf">Polymarket fee (% of cost)</label><input id="pf" type="number" min="0" step="0.1" value="0"></div>
+<div><label for="slip">Slippage (¢ per contract)</label><input id="slip" type="number" min="0" step="0.1" value="0.3"></div>
+<div><label for="minE">Minimum edge to act (¢)</label><input id="minE" type="number" min="0" step="0.1" value="0.5"></div>
+<p class="note" style="grid-column:1/-1">Fee settings are assumptions for the demo. The real build reads each platform's published fee schedule.</p>
+</div>
+<div class="result" aria-live="polite">
+<div class="note">Net profit if held to resolution</div>
+<div class="big"><span class="slab" id="netBig">$0.00</span></div>
+<p style="margin-top:10px" id="verdict"></p>
+<div class="water" id="water"></div>
+<table style="margin-top:14px"><tbody id="mtab"></tbody></table>
+</div>
+</div>
+</div></section>
+
+<section class="band" id="how" style="background:var(--panel)"><div class="wrap">
+<h2>How it works: code does the math, AI reads the language</h2>
+<p class="muted">The AI is used only where code can't do the job. Everything else is plain, testable Python.</p>
+<div class="flow" id="flow"></div>
+<div class="two">
+<div><h3>Errors it plans for</h3><ul>
+<li>API down or rate-limited: retries with backoff, cached responses</li>
+<li>Bad or renamed fields: Pydantic validation, rejected rows kept with the reason</li>
+<li>Duplicates: upsert on platform + market id</li>
+<li>Stale prices: pairs older than a set number of minutes are skipped</li>
+<li>Broken AI JSON: one retry with the error, then human review</li>
+<li>Made-up quotes: every quote checked against the source text</li>
+</ul></div>
+<div><h3>Guardrails</h3><ul>
+<li>Read-only: no wallets, no trading keys, no orders</li>
+<li>Public market data only, within each platform's terms</li>
+<li>Unclear or missing rules are rated high risk, never guessed</li>
+<li>Every warning shows the exact rule text behind it</li>
+<li>Prompt version and model saved with every result</li>
+</ul></div>
+</div>
+</div></section>
+
+<section class="band" id="plan"><div class="wrap">
+<h2>Evaluation plan: how I'll know it works</h2>
+<p class="muted">Targets for the build, measured against pairs I label by hand. These are goals, not results yet.</p>
+<div class="scroll"><table>
+<thead><tr><th>What's measured</th><th>How</th><th class="num">Target</th></tr></thead>
+<tbody id="evalT"></tbody></table></div>
+<p class="note" style="margin-top:8px">Loop: run the test set, change one thing (prompt, examples, model), re-run, keep the change only if scores improve. Every real failure becomes a new test case.</p>
+</div></section>
+
+<section class="band" id="energy" style="background:var(--panel)"><div class="wrap">
+<h2>The same engine, pointed at electricity markets</h2>
+<p class="muted">ArbLens compares two rulebooks for the same event. An energy aggregator compares five market rulebooks for similar programs. The flagged cells below are where the rules differ from the majority, the places a team is most likely to slip.</p>
+<div class="scroll"><table id="enT"></table></div>
+<p class="note" style="margin-top:8px">Illustrative values for Markets A to E, not real market rules. In a real build, each cell would cite the exact manual section, for example from IESO, NYISO, PJM, MISO and AESO documents.</p>
+<div class="two" style="margin-top:18px">
+<div class="card"><h3>Rule change impact <small>sample</small></h3><p id="impact"></p></div>
+<div class="card"><h3>What carries over from ArbLens</h3><ul>
+<li>Side-by-side rule comparison with exact quotes</li>
+<li>Quote checking so the AI can't invent rule text</li>
+<li>Code for deadlines and numbers, AI for language</li>
+<li>Human sign-off before anything is sent or filed</li>
+</ul></div>
+</div>
+</div></section>
+
+<footer class="band"><div class="wrap"><p class="note">ArbLens prototype by Varun Patel. Built to show the design and logic before the live data pipeline. Python, FastAPI, PostgreSQL + pgvector, LLM with Pydantic validation, Streamlit planned for the production dashboard.</p></div></footer>
+
+<script>
+{
+const pairs=[
+{id:1,q:"Fed cuts rates at the December meeting?",a:41,b:56,liq:2500,days:27,risk:"LOW",
+ra:"Resolves Yes if the FOMC statement released after the December meeting announces a lower federal funds target range.",
+rb:"Resolves Yes if the Federal Reserve announces a cut to the federal funds rate at its December meeting, per the official FOMC statement.",
+diffs:[],reason:"Both use the official FOMC statement for the same meeting."},
+{id:2,q:"October CPI inflation above 3.0%?",a:22,b:72,liq:1800,days:24,risk:"MEDIUM",
+ra:"Based on the BLS CPI-U year-over-year figure for October, rounded to one decimal place.",
+rb:"Resolves per the first official BLS release. If the release is delayed past December 15, this market resolves No.",
+diffs:[{type:"Edge case",qa:"rounded to one decimal place",qb:"If the release is delayed past December 15, this market resolves No"}],reason:"A delayed release resolves No on one platform only."},
+{id:3,q:"Bitcoin closes the year higher than it opened?",a:30,b:66,liq:4000,days:41,risk:"HIGH",
+ra:"Based on the CF Benchmarks Bitcoin Real Time Index at 4:00 PM ET on December 31, compared with January 1.",
+rb:"Resolves using the Binance BTC/USDT 1-minute candle close at 12:00 PM ET on December 31, compared with January 1.",
+diffs:[{type:"Source",qa:"CF Benchmarks Bitcoin Real Time Index",qb:"Binance BTC/USDT 1-minute candle close"},{type:"Deadline",qa:"4:00 PM ET on December 31",qb:"12:00 PM ET on December 31"}],reason:"Different price source and a four-hour gap in the snapshot time."},
+{id:4,q:"Government shutdown begins before January 31?",a:18,b:79,liq:1200,days:72,risk:"HIGH",
+ra:"Resolves Yes if the Office of Personnel Management announces a lapse in appropriations that shuts down federal agencies.",
+rb:"Resolves Yes if a consensus of credible reporting confirms that a federal government shutdown has begun.",
+diffs:[{type:"Source",qa:"Office of Personnel Management announces",qb:"a consensus of credible reporting confirms"},{type:"Definition",qa:"partial shutdown counts as Yes",qb:"federal government shutdown has begun"}],reason:"Official notice versus news reports. Second quote failed verification."},
+{id:5,q:"A named storm makes US landfall in November?",a:9,b:89,liq:150,days:11,risk:"LOW",
+ra:"Resolves Yes if the National Hurricane Center reports landfall of a named storm in the US during November.",
+rb:"Resolves Yes if the National Hurricane Center confirms a named storm made US landfall in November.",
+diffs:[],reason:"Same source and window. Thin market: only 150 contracts at this price."},
+{id:6,q:"S&P 500 ends the year above 6,800?",a:47,b:52,liq:6000,days:41,risk:"LOW",
+ra:"Based on the official S&P 500 closing value on the last trading day of the year.",
+rb:"Resolves using the S&P 500 official close on the final trading day of the year.",
+diffs:[],reason:"Matching rules."},
+{id:7,q:"NYC high above 60°F on November 28?",a:25,b:74,liq:900,days:8,risk:"LOW",
+ra:"Based on the NWS Central Park daily climate report for November 28.",
+rb:"Resolves per the NWS daily climate report for Central Park on November 28.",
+diffs:[],reason:"Matching rules."},
+{id:8,q:"Company X announces a stock split before March 1?",a:6,b:92,liq:700,days:101,risk:"HIGH",
+ra:"Resolves Yes if Company X announces a stock split via press release or SEC filing before March 1.",
+rb:"Resolves Yes if a stock split by Company X is announced and takes effect before March 1.",
+diffs:[{type:"Definition",qa:"announces a stock split",qb:"announced and takes effect"}],reason:"Announcement alone counts on one platform; the other also needs it to take effect."},
+{id:9,q:"November unemployment at or above 4.5%?",a:35,b:63,liq:1500,days:16,risk:"LOW",
+ra:"Based on the BLS Employment Situation report for November.",
+rb:"Resolves per the BLS Employment Situation release for November.",
+diffs:[],reason:"Matching rules."}];
+const N=100,KR=0.07,PF=0,SLIP=0,MIN=0.5;
+const $=id=>document.getElementById(id);
+const ceilC=x=>Math.ceil(Math.round(x*1e6)/1e4)/100;
+function calc(a,b,q,kr,pf,slip){
+ const cost=(a+b)/100*q;
+ const kFee=ceilC(kr*q*(a/100)*(1-a/100));
+ const pFee=ceilC(b/100*q*pf/100);
+ const slipC=slip/100*q;
+ const gross=q-cost;
+ const net=gross-kFee-pFee-slipC;
+ return {cost,kFee,pFee,slipC,gross,net,per:net/q*100,grossPer:(100-a-b)};
+}
+function verdictOf(p,m){ if(m.per<MIN)return "lost"; return p.risk==="LOW"?"arb":"risk"; }
+const vName={arb:"True arb",risk:"Rules differ",lost:"Gone after fees"};
+const vCol={arb:"var(--blue)",risk:"var(--risk)",lost:"var(--lost)"};
+pairs.forEach(p=>{p.m=calc(p.a,p.b,N,KR,PF,SLIP);p.v=verdictOf(p,p.m)});
+const order=[...pairs].sort((x,y)=>y.m.grossPer-x.m.grossPer);
+const lo=-2,hi=8,pos=v=>((Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*100);
+const surv=pairs.filter(p=>p.v!=="lost").length,arbs=pairs.filter(p=>p.v==="arb").length;
+$("kpis").innerHTML=`<div class="kpi"><div class="n">${pairs.length}</div><div class="l">price gaps found</div></div><div class="kpi"><div class="n">${surv}</div><div class="l">survive fees</div></div><div class="kpi key"><div class="n">${arbs}</div><div class="l">survive the rules check</div></div>`;
+$("ticks").innerHTML=[-2,0,2,4,6,8].map(t=>`<span style="left:${pos(t)}%">${t}¢</span>`).join("");
+$("rows").innerHTML=order.map(p=>{const g=pos(p.m.grossPer),n=pos(p.m.per),l=Math.min(g,n),w=Math.abs(g-n);
+ return `<button class="row" data-id="${p.id}" aria-label="${p.q}"><span class="q">${p.q}</span><span class="track"><span class="axis0" style="left:${pos(0)}%"></span><span class="bar" style="left:${l}%;width:${w}%"></span><span class="gross" style="left:${g}%" title="Gross ${p.m.grossPer}¢"></span><span class="net" style="left:${n}%;background:${vCol[p.v]}" title="Net ${p.m.per.toFixed(2)}¢"></span></span><span class="vals"><b>${p.m.per.toFixed(2)}¢</b><br><span class="tag" style="background:${vCol[p.v]}">${vName[p.v]}</span></span></button>`}).join("");
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const norm=s=>s.toLowerCase().replace(/\s+/g," ").trim();
+function hl(text,quotes){let h=esc(text);quotes.forEach(q=>{const e=esc(q);if(q&&text.includes(q))h=h.replace(e,`<mark>${e}</mark>`)});return h}
+function show(id){
+ const p=pairs.find(x=>x.id===id);
+ document.querySelectorAll(".row").forEach(r=>r.classList.toggle("on",+r.dataset.id===id));
+ $("pq").textContent=p.q;
+ $("psum").innerHTML=`Gross gap ${p.m.grossPer}¢, net edge ${p.m.per.toFixed(2)}¢ per contract after fees. Rules risk: <b>${p.risk}</b>. Verdict: <b style="color:${vCol[p.v]}">${vName[p.v]}</b>. ${esc(p.reason)}`;
+ $("ra").innerHTML=hl(p.ra,p.diffs.map(d=>d.qa));
+ $("rb").innerHTML=hl(p.rb,p.diffs.map(d=>d.qb));
+ $("diffs").innerHTML=p.diffs.length?p.diffs.map(d=>{const ok=norm(p.ra).includes(norm(d.qa))&&norm(p.rb).includes(norm(d.qb));
+  return `<div class="diff"><b>${d.type}</b>: "${esc(d.qa)}" vs "${esc(d.qb)}"<br>${ok?'<span class="ok">Quotes verified in source</span>':'<span class="bad">Quote not found in source: sent to human review</span>'}</div>`}).join(""):`<p class="ok" style="margin:0">No differences found. Both rules use the same source, deadline and definition.</p>`;
+ $("json").textContent=JSON.stringify({same_event:true,differences:p.diffs.map(d=>({type:d.type,quote_a:d.qa,quote_b:d.qb})),risk:p.risk,reason:p.reason,prompt_version:"v1"},null,2);
+}
+$("rows").addEventListener("click",e=>{const r=e.target.closest(".row");if(r){show(+r.dataset.id);location.hash="pair"}});
+show(3);
+$("presets").innerHTML=pairs.slice(0,5).map(p=>`<button class="btn" data-p="${p.id}">${p.q.split(" ").slice(0,3).join(" ")}…</button>`).join("")+`<button class="btn" id="reset">Reset</button>`;
+const ids=["pa","pb","qty","days","kr","pf","slip","minE"];
+const defaults={pa:41,pb:56,qty:100,days:27,kr:0.07,pf:0,slip:0.3,minE:0.5};
+const money=v=>(v<0?"−$":"$")+Math.abs(v).toFixed(2);
+function run(){
+ const v=Object.fromEntries(ids.map(i=>[i,Math.max(0,parseFloat($(i).value)||0)]));
+ const q=Math.max(1,Math.round(v.qty)),a=Math.min(99,v.pa),b=Math.min(99,v.pb);
+ const m=calc(a,b,q,v.kr,v.pf,v.slip);
+ const roi=m.cost>0?m.net/(m.cost+m.kFee+m.pFee)*100:0,ann=roi*365/Math.max(1,v.days);
+ $("netBig").textContent=money(m.net);
+ const ok=m.per>=v.minE;
+ $("verdict").innerHTML=a+b>=100?`<b class="bad">No gap.</b> The two prices add up to ${a+b}¢, so buying both costs at least the $1 payout.`:ok?`<b class="ok">Clears the ${v.minE}¢ minimum.</b> Next check: do the two rulebooks match?`:`<b class="bad">Below the ${v.minE}¢ minimum.</b> The gap disappears after fees and slippage.`;
+ const rows=[["Payout",q,"var(--ink)"],["Cost of both sides",-m.cost,"var(--slate)"],["Kalshi fee",-m.kFee,"var(--risk)"],["Polymarket fee",-m.pFee,"var(--risk)"],["Slippage",-m.slipC,"var(--risk)"],["Net profit",m.net,m.net>=0?"var(--blue)":"var(--risk)"]];
+ const mx=Math.max(...rows.map(r=>Math.abs(r[1])),1);
+ $("water").innerHTML=rows.map(r=>`<div class="wrow"><span>${r[0]}</span><span><span class="wbar" style="display:block;width:${Math.max(.5,Math.abs(r[1])/mx*100)}%;background:${r[2]}"></span></span><span class="v">${money(r[1])}</span></div>`).join("");
+ $("mtab").innerHTML=[["Gross gap per contract",`${(100-a-b).toFixed(1)}¢`],["Net edge per contract",`${m.per.toFixed(2)}¢`],["Return on capital",`${roi.toFixed(2)}%`],["Annualized (held "+Math.round(v.days)+" days)",`${ann.toFixed(1)}%`]].map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("");
+}
+ids.forEach(i=>$(i).addEventListener("input",run));
+$("presets").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+ if(b.id==="reset"){ids.forEach(i=>$(i).value=defaults[i])}else{const p=pairs.find(x=>x.id===+b.dataset.p);$("pa").value=p.a;$("pb").value=p.b;$("days").value=p.days;$("qty").value=Math.min(100,p.liq)}
+ run()});
+run();
+const flow=[["code","Fetch","Pull open markets, prices and rules from both public APIs"],["code","Validate","Pydantic checks every record; bad rows set aside"],["code","Match","Embeddings in pgvector find likely same-question pairs"],["ai","Confirm","AI decides: same question, different, or unsure"],["code","Price","Gap after fees, slippage and available volume"],["ai","Compare rules","AI flags source, deadline and definition differences"],["code","Verify","Quotes checked against source; scores; review queue"]];
+$("flow").innerHTML=flow.map(f=>`<div class="stn"><span class="who ${f[0]}">${f[0]==="ai"?"AI":"Code"}</span><b>${f[1]}</b><p>${f[2]}</p></div>`).join("");
+const ev=[["Match accuracy","Hand-labelled pairs: same, different, unsure","90%+"],["Rule differences caught","Planted differences in a test set","18 of 20+"],["Made-up quotes reaching the dashboard","Quote check on every AI result","0"],["Valid JSON on first try","Pydantic validation log","95%+"],["Fee math correctness","Unit tests against hand calculations","100%"],["Warnings that matched real outcomes","Track how flagged pairs actually resolved","Measured over time"]];
+$("evalT").innerHTML=ev.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("");
+const dims=[["Notice before an event",["2 hours","2 hours","1 hour","2 hours","2 hours"]],["Performance test",["Yearly","Yearly","Yearly","Twice a year","Yearly"]],["Baseline method",["10 of 10 days","10 of 10 days","High 5 of 10","10 of 10 days","10 of 10 days"]],["Meter data due",["5 business days","5 business days","5 business days","5 business days","2 business days"]],["Penalty basis",["Shortfall × price","Shortfall × price","Shortfall × price","Shortfall × price","Shortfall × price"]]];
+const mk=["Market A","Market B","Market C","Market D","Market E"];
+function mode(arr){const c={};arr.forEach(x=>c[x]=(c[x]||0)+1);return Object.keys(c).sort((x,y)=>c[y]-c[x])[0]}
+$("enT").innerHTML=`<thead><tr><th>Rule</th>${mk.map(m=>`<th>${m}</th>`).join("")}</tr></thead><tbody>`+dims.map(d=>{const md=mode(d[1]);return `<tr><td><b>${d[0]}</b></td>${d[1].map(v=>`<td class="${v!==md?"cell-diff":""}">${v}</td>`).join("")}</tr>`}).join("")+"</tbody>";
+const flagged=dims.reduce((s,d)=>{const md=mode(d[1]);return s+d[1].filter(v=>v!==md).length},0);
+$("impact").innerHTML=`${flagged} rules differ from the majority across the five sample markets. If Market C shortens its event notice from 2 hours to 1 hour, the system lists the enrolled sites affected (for example, 3 of 12 sample sites), quotes the changed section, and drafts a client notice for a person to review.`;
+}
+</script>
+</body>
+</html>

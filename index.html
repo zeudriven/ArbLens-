@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArbLens Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#101418);--ink:light-dark(#101418,#e8ecf0);--slate:light-dark(#5b6672,#9aa4af);--line:light-dark(#e3e7eb,#262d35);--panel:light-dark(#f5f7f9,#171d24);--yellow:#ffd84a;--blue:light-dark(#1f5fd6,#6e9cff);--risk:light-dark(#c2410c,#ff8a4c);--lost:light-dark(#8a94a0,#6b7580);--good:light-dark(#11803d,#4ade80)}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,sans-serif;overflow-x:clip}
+.band{padding-block:clamp(22px,3.5vw,44px);padding-inline:max(4vw,16px)}
+.wrap{max-width:1280px;margin:0 auto}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0}
+h1{font-size:clamp(28px,4vw,44px);text-wrap:balance;max-width:22ch}
+h2{font-size:clamp(22px,2.6vw,30px);margin-bottom:6px;text-wrap:balance}
+h3{font-size:17px;margin-bottom:6px}
+p{margin:0 0 8px;max-width:72ch}
+a{color:var(--blue)}
+.muted{color:var(--slate)}.note{font-size:13px;color:var(--slate)}
+nav{position:sticky;top:0;z-index:9;background:var(--bg);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center;padding:10px max(4vw,16px)}
+nav b{font-weight:800;margin-right:6px}nav b span{background:var(--yellow);color:#101418;border-radius:5px;padding:0 6px;margin-left:4px;font-size:12px}
+nav a{color:var(--ink);text-decoration:none;font-size:14px;font-weight:600;padding:6px 0}nav a:hover{color:var(--blue)}
+.banner{background:color-mix(in srgb,var(--risk) 12%,var(--bg));border-bottom:1px solid color-mix(in srgb,var(--risk) 35%,transparent);font-size:13.5px}
+.banner .wrap{padding:9px max(4vw,16px)}
+.top{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:end;margin-bottom:16px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.kpi{padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.kpi.key{background:var(--yellow);border-color:var(--yellow);color:#101418}
+.kpi .n{font-size:clamp(22px,2.8vw,32px);font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;margin-top:5px}
+.controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end;margin:8px 0 10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.controls>div{display:flex;flex-direction:column;gap:3px}
+label,.lbl{font-size:12px;font-weight:700;color:var(--slate)}
+input[type=number],input[type=search],select{font:15px Manrope,sans-serif;padding:8px 10px;border:1px solid var(--slate);border-radius:8px;background:var(--bg);color:var(--ink);min-height:40px}
+input[type=search]{width:min(260px,70vw)}input[type=number]{width:110px}
+input:focus-visible,button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.chk{flex-direction:row!important;align-items:center;gap:6px!important;min-height:40px}.chk label{color:var(--ink);font-size:13.5px}
+.btn{font:700 14px Manrope,sans-serif;padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;min-height:40px}
+.btn:hover{border-color:var(--slate)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.good{border-color:var(--blue);color:var(--blue)}.btn.bad{border-color:var(--risk);color:var(--risk)}
+.status{font-size:13px;color:var(--slate);margin:4px 0 8px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:6px}
+.scanning .pulse{background:var(--yellow);animation:p 1s infinite alternate}@keyframes p{to{opacity:.3}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;margin:4px 0 8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.rows{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 9.5rem;gap:14px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-inline:0;border-top:0;width:100%;text-align:left;color:inherit;font:inherit;min-height:48px}
+.row:hover,.row.on{background:var(--panel)}
+.q{font-size:14px;font-weight:700;line-height:1.3}.q small{display:block;font-weight:500;color:var(--slate);font-size:12.5px;margin-top:2px}
+.track{position:relative;height:26px}
+.axis0{position:absolute;top:0;bottom:0;width:1px;background:var(--slate);opacity:.5}
+.bar{position:absolute;top:12px;height:2px;background:var(--slate);opacity:.45}
+.gross,.net{position:absolute;top:6px;width:14px;height:14px;border-radius:50%;margin-left:-7px}
+.gross{border:2px solid var(--slate);background:var(--bg)}
+.clip{position:absolute;top:3px;font-size:11px;color:var(--slate)}
+.vals{font-size:13px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff;white-space:nowrap}
+.tag.outline{background:transparent!important;border:1.5px solid currentColor}
+.scale{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 9.5rem;gap:14px;padding:4px 6px;font-size:12px;color:var(--slate)}
+.scale .ticks{position:relative;height:16px}.scale .ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.empty{padding:28px 8px;color:var(--slate);text-align:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.bg-panel{background:var(--panel)}.bg-panel .card{background:var(--bg)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);background:var(--bg)}
+.chip.k{border-color:var(--blue)}.chip.p{border-color:var(--risk)}
+.warn{border-left:3px solid var(--risk);padding:4px 10px;margin:6px 0;font-size:14px}
+.rules{white-space:pre-wrap;font-size:13.5px;max-height:340px;overflow:auto;margin:0}
+mark{background:color-mix(in srgb,var(--risk) 25%,transparent);color:inherit;padding:0 2px;border-radius:3px}
+mark.ai{background:color-mix(in srgb,var(--yellow) 55%,transparent)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:700;font-size:12.5px;color:var(--slate)}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.pos{color:var(--good);font-weight:700}.neg{color:var(--risk);font-weight:700}
+.big{font-size:clamp(34px,5vw,54px);font-weight:800;line-height:1;white-space:nowrap}
+.slab{display:inline-block;background:var(--yellow);color:#101418;padding:5px 11px;border-radius:8px}
+.flow{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.stn{flex:1 1 140px;border:1px solid var(--line);border-radius:10px;padding:11px;background:var(--bg)}
+.who{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:5px}
+.who.code{border:1px solid var(--line)}.who.ai{background:var(--yellow);color:#101418}.who.you{background:var(--blue);color:#fff}
+.stn b{display:block;font-size:14.5px;margin-bottom:3px}.stn p{font-size:13px;margin:0;color:var(--slate)}
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:20px;align-items:start}
+.inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.inputs input{width:100%}
+.water{margin-top:12px;display:grid;gap:6px}
+.wrow{display:grid;grid-template-columns:9em minmax(0,1fr) 6.5em;gap:10px;align-items:center;font-size:13.5px}
+.wbar{height:13px;border-radius:3px}.wrow .v{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#toast{position:fixed;right:16px;bottom:16px;max-width:min(420px,calc(100vw - 32px));z-index:20;display:grid;gap:8px}
+.toast{background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;box-shadow:0 6px 24px #0004}
+.toast.err{background:var(--risk);color:#fff}
+.skel{color:var(--slate);font-style:italic}
+ul{margin:6px 0 0;padding-left:20px}li{margin-bottom:4px}
+footer{border-top:1px solid var(--line)}
+@media(max-width:960px){.top,.calc,.grid2,.grid3{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.row,.scale{grid-template-columns:minmax(0,1fr) 7.5rem}.row .track,.scale .ticks{grid-column:1/-1;grid-row:2}.scale>span:first-child{display:none}.inputs{grid-template-columns:minmax(0,1fr)}.wrow{grid-template-columns:7em minmax(0,1fr) 5.5em}}
+@media(prefers-reduced-motion:no-preference){.net{transition:left .4s ease}}
+</style>
+</head>
+<body>
+<nav><div class="wrap"><b>ArbLens<span>LIVE</span></b><a href="#scanner">Scanner</a><a href="#pair">Pair detail</a><a href="#paper">Paper portfolio</a><a href="#calc">Calculator</a><a href="#how">How it works</a><a href="/prototype">Original prototype</a></div></nav>
+<div class="banner"><div class="wrap"><b>Paper trading only.</b> Prices are live; trades use pretend money. Polymarket is closed to Ontario residents (OSC settlement, April 2025), so the two-platform trade can't legally be placed from Ontario. Analysis only, not financial advice.</div></div>
+
+<section class="band" id="scanner"><div class="wrap">
+<div class="top">
+<div>
+<h1>Live price gaps between Kalshi and Polymarket</h1>
+<p class="muted">Every open market on both platforms that closes in the next six months, paired by question, priced after each platform's real fee, then flagged for anything that suggests the two are not the same bet.</p>
+</div>
+<div class="kpis" id="kpis"></div>
+</div>
+<div class="controls">
+<div><label for="q">Search</label><input id="q" type="search" placeholder="e.g. Fed, Japan, playoffs"></div>
+<div><label for="view">Show</label><select id="view">
+<option value="clean">Likely same question</option>
+<option value="all">All candidates</option>
+<option value="confirmed">Confirmed by me</option>
+<option value="flagged">Only flagged</option>
+</select></div>
+<div><label for="minE">Min net edge (¢)</label><input id="minE" type="number" step="0.1" value="0"></div>
+<div><label for="minS">Min match score</label><input id="minS" type="number" step="0.05" min="0" max="1" value="0.6"></div>
+<div><label for="sort">Sort by</label><select id="sort">
+<option value="net">Net edge per contract</option>
+<option value="ann">Annualized return</option>
+<option value="score">Match score</option>
+<option value="soon">Closes soonest</option>
+</select></div>
+<div class="chk"><input id="hideRej" type="checkbox" checked><label for="hideRej">Hide rejected</label></div>
+<div class="chk"><input id="auto" type="checkbox" checked><label for="auto">Auto-refresh</label></div>
+<div><button class="btn" id="refresh">Refresh now</button></div>
+</div>
+<div class="status" id="status"><span><span class="pulse"></span>Connecting…</span></div>
+<div class="legend">
+<span><span class="dot" style="border:2px solid var(--slate)"></span>Gross gap</span>
+<span><span class="dot" style="background:var(--blue)"></span>Net edge: confirmed by you</span>
+<span><span class="dot" style="background:var(--risk)"></span>Net edge: unconfirmed or flagged</span>
+<span><span class="dot" style="background:var(--lost)"></span>Gone after fees</span>
+</div>
+<div class="scale"><span>Kalshi market / Polymarket market (100 contracts, best price)</span><div class="ticks" id="ticks"></div><span style="text-align:right">Net per contract</span></div>
+<div class="rows" id="rows"><div class="empty">First scan pulls about 60,000 markets and takes 30 to 40 seconds…</div></div>
+<p class="note" style="margin-top:8px" id="shown"></p>
+</div></section>
+
+<section class="band bg-panel" id="pair"><div class="wrap">
+<h2 id="pq">Pair detail</h2>
+<p class="muted" id="psum">Pick a row in the scanner to open its live order books, both rulebooks and the paper-trade ticket.</p>
+<div id="pbody"></div>
+</div></section>
+
+<section class="band" id="paper"><div class="wrap">
+<h2>Paper portfolio</h2>
+<p class="muted">Each position is a pair: one side on Kalshi, the opposite side on Polymarket. If both platforms resolve the same way, exactly one side pays $1 per contract. If their rules split, you get $0 or $2.</p>
+<div class="kpis" id="pk" style="margin:12px 0"></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+<button class="btn" id="settle">Check for resolutions</button>
+<button class="btn" id="preload">Refresh marks</button>
+<button class="btn bad" id="reset">Reset account</button>
+</div>
+<h3>Open positions</h3>
+<div class="scroll"><table><thead><tr><th>Pair</th><th>Legs</th><th class="num">Qty</th><th class="num">Paid</th><th class="num">Sell now</th><th class="num">If held, same result</th><th></th></tr></thead><tbody id="openT"><tr><td colspan="7" class="skel">Loading…</td></tr></tbody></table></div>
+<h3 style="margin-top:18px">History</h3>
+<div class="scroll"><table><thead><tr><th>Pair</th><th>Outcome</th><th class="num">Paid</th><th class="num">Got back</th><th class="num">P&amp;L</th></tr></thead><tbody id="histT"></tbody></table></div>
+</div></section>
+
+<section class="band bg-panel" id="calc"><div class="wrap">
+<h2>Margin calculator</h2>
+<p class="muted">Try your own numbers. The fee formulas match each platform's published schedule: Kalshi rounds up to the cent, Polymarket uses its per-category rate.</p>
+<div style="margin:0 0 12px"><button class="btn" id="usePair" disabled>Load the selected pair</button> <button class="btn" id="resetCalc">Reset</button></div>
+<div class="calc">
+<div class="inputs">
+<div><label for="pa">Kalshi side price (¢)</label><input id="pa" type="number" min="1" max="99" step="0.1" value="41"></div>
+<div><label for="pb">Polymarket opposite side price (¢)</label><input id="pb" type="number" min="1" max="99" step="0.1" value="56"></div>
+<div><label for="qty">Contracts</label><input id="qty" type="number" min="1" step="1" value="100"></div>
+<div><label for="days">Days until resolution</label><input id="days" type="number" min="1" step="1" value="27"></div>
+<div><label for="kr">Kalshi fee rate (× C × P × (1−P))</label><input id="kr" type="number" min="0" step="0.005" value="0.07"></div>
+<div><label for="pr">Polymarket fee rate (× C × p × (1−p))</label><input id="pr" type="number" min="0" step="0.005" value="0.05"></div>
+<div><label for="slip">Extra slippage (¢ per contract)</label><input id="slip" type="number" min="0" step="0.1" value="0"></div>
+<div><label for="minC">Minimum edge to act (¢)</label><input id="minC" type="number" min="0" step="0.1" value="0.5"></div>
+</div>
+<div class="card" style="background:var(--bg)" aria-live="polite">
+<div class="note">Net profit if held to resolution and both platforms agree</div>
+<div class="big"><span class="slab" id="netBig">$0.00</span></div>
+<p style="margin-top:10px" id="verdict"></p>
+<div class="water" id="water"></div>
+<table style="margin-top:12px"><tbody id="mtab"></tbody></table>
+</div>
+</div>
+</div></section>
+
+<section class="band" id="how"><div class="wrap">
+<h2>How it works: code does the math, you and the AI read the language</h2>
+<div class="flow" id="flow"></div>
+<div class="grid3">
+<div class="card"><h3>Why most "gaps" are fake</h3><ul>
+<li>The two titles look alike but ask different things ("visit" vs "arrested")</li>
+<li>Different closing dates, thresholds or data sources</li>
+<li>Only a few contracts at the quoted price</li>
+<li>Fees: up to 1.75¢ per contract on each side near 50¢</li>
+</ul></div>
+<div class="card"><h3>What a real one looks like</h3><ul>
+<li>Same wording, same date, prices within a few cents</li>
+<li>No warnings and no one-sided words</li>
+<li>Rules name the same source and deadline</li>
+<li>Edge survives at the size you want</li>
+<li>You've pressed "Same question"</li>
+</ul></div>
+<div class="card"><h3>Guardrails</h3><ul>
+<li>Read-only: no keys, no wallets, no orders</li>
+<li>Every AI quote is checked against the source text</li>
+<li>Unclear rules are rated high risk, never guessed</li>
+<li>Paper fills walk the real order book</li>
+</ul></div>
+</div>
+</div></section>
+
+<footer class="band"><div class="wrap"><p class="note">ArbLens. Python, FastAPI, SQLite, Kalshi Trade API v2, Polymarket Gamma and CLOB APIs, optional Claude rules check with Pydantic validation. Data is public market data; nothing here places a trade.</p></div></footer>
+<div id="toast" aria-live="polite"></div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=v=>v==null?"–":(v<0?"−$":"$")+Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const cents=v=>v==null?"–":(v*100).toFixed(1)+"¢";
+const sgn=(v,d=2)=>v==null?"–":(v>0?"+":v<0?"−":"")+Math.abs(v).toFixed(d);
+const cls=v=>v>0?"pos":v<0?"neg":"";
+function toast(msg,err){const t=document.createElement("div");t.className="toast"+(err?" err":"");t.textContent=msg;$("toast").appendChild(t);setTimeout(()=>t.remove(),err?7000:4000)}
+async function api(path,opts={}){
+ const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});
+ if(!r.ok){let m=r.statusText;try{const j=await r.json();m=typeof j.detail==="string"?j.detail:JSON.stringify(j.detail)}catch{}throw new Error(m)}
+ return r.json();
+}
+const DIR={"K_YES+P_NO":["YES","Kalshi","NO","Polymarket"],"K_NO+P_YES":["NO","Kalshi","YES","Polymarket"]};
+const dirText=(d,kp,pp)=>{const x=DIR[d];return `Buy ${x[0]} on Kalshi${kp!=null?" @ "+cents(kp):""} + buy ${x[2]} on Polymarket${pp!=null?" @ "+cents(pp):""}`};
+
+/* ---------------- scanner ---------------- */
+let scan=null,selected=null,detail=null;
+const lo=-6,hi=12,pos=v=>((Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*100);
+$("ticks").innerHTML=[-6,-3,0,3,6,9,12].map(t=>`<span style="left:${pos(t)}%">${t}¢</span>`).join("");
+function verdict(p,minE){
+ if(p.review==="rejected")return{k:"rej",t:"Rejected by you",c:"var(--lost)",o:true};
+ if(!p.best||p.best.net_per<minE)return{k:"lost",t:"Gone after fees",c:"var(--lost)"};
+ if(p.warnings.length)return{k:"risk",t:"Different bet?",c:"var(--risk)"};
+ if(p.review!=="confirmed")return{k:"unconf",t:"Unconfirmed",c:"var(--risk)",o:true};
+ return{k:"arb",t:"Confirmed arb",c:"var(--blue)"};
+}
+function filtered(){
+ if(!scan)return[];
+ const q=$("q").value.trim().toLowerCase(),view=$("view").value,minE=+$("minE").value||0,minS=+$("minS").value||0,hideRej=$("hideRej").checked;
+ let list=scan.pairs.filter(p=>{
+  if(hideRej&&p.review==="rejected")return false;
+  if(q&&!(p.kalshi.title+" "+p.polymarket.title).toLowerCase().includes(q))return false;
+  if(p.score<minS&&view!=="confirmed")return false;
+  if(!p.best||p.best.net_per<minE)return false;
+  if(view==="clean"&&p.warnings.length)return false;
+  if(view==="confirmed"&&p.review!=="confirmed")return false;
+  if(view==="flagged"&&!p.warnings.length)return false;
+  return true});
+ const s=$("sort").value,key={net:p=>-(p.best?.net_per??-1e9),ann:p=>-(p.best?.annualized??-1e9),score:p=>-p.score,soon:p=>p.days_to_close??1e9}[s];
+ return list.sort((a,b)=>key(a)-key(b));
+}
+function renderScan(){
+ if(!scan)return;
+ const minE=+$("minE").value||0,list=filtered(),shown=list.slice(0,150);
+ const pos0=scan.pairs.filter(p=>p.best&&p.best.net_per>0).length;
+ const clean=scan.pairs.filter(p=>p.best&&p.best.net_per>0&&!p.warnings.length&&p.review!=="rejected").length;
+ const conf=scan.pairs.filter(p=>p.review==="confirmed"&&p.best&&p.best.net_per>0).length;
+ $("kpis").innerHTML=`<div class="kpi"><div class="n">${scan.pairs.length.toLocaleString()}</div><div class="l">pairs matched</div></div><div class="kpi"><div class="n">${pos0}</div><div class="l">positive after fees</div></div><div class="kpi"><div class="n">${clean}</div><div class="l">…with no warnings</div></div><div class="kpi key"><div class="n">${conf}</div><div class="l">confirmed by you</div></div>`;
+ $("rows").innerHTML=shown.length?shown.map(p=>{
+  const v=verdict(p,minE),b=p.best,g=pos(b.gross_per),n=pos(b.net_per),l=Math.min(g,n),w=Math.abs(g-n);
+  const clipR=b.gross_per>hi?`<span class="clip" style="right:-2px">▸</span>`:"";
+  return `<button class="row${p.key===selected?" on":""}" data-k="${esc(p.key)}"><span class="q">${esc(p.kalshi.title)}<small>${esc(p.polymarket.title)} · match ${p.score.toFixed(2)}${p.days_to_close!=null?" · "+Math.ceil(p.days_to_close)+"d":""}</small></span><span class="track"><span class="axis0" style="left:${pos(0)}%"></span><span class="bar" style="left:${l}%;width:${w}%"></span><span class="gross" style="left:${g}%" title="Gross ${b.gross_per.toFixed(1)}¢"></span><span class="net" style="left:${n}%;background:${v.c}" title="Net ${b.net_per.toFixed(2)}¢"></span>${clipR}</span><span class="vals"><b class="${cls(b.net_per)}">${sgn(b.net_per)}¢</b>${b.annualized!=null&&b.net_per>0?` <span class="note">${b.annualized>999?">999":b.annualized.toFixed(0)}%/yr</span>`:""}<br><span class="tag${v.o?" outline":""}" style="background:${v.c};color:${v.o?v.c:"#fff"}">${v.t}</span></span></button>`}).join("")
+  :`<div class="empty">No pairs match these filters. Try "All candidates" or a lower match score.</div>`;
+ $("shown").textContent=`Showing ${shown.length} of ${list.length} pairs after filters. Prices are best bid/ask from the last scan; open a pair for live order books. Not financial advice.`;
+}
+function renderStatus(){
+ if(!scan)return;
+ const age=Math.round(Date.now()/1000-scan.updated_at);
+ const el=$("status");el.classList.toggle("scanning",!!scan.scanning);
+ el.innerHTML=`<span><span class="pulse"></span>${scan.scanning?"Refreshing in background… ":""}Updated ${age<60?age+"s":Math.round(age/60)+"m"} ago</span><span>${scan.kalshi_markets?.toLocaleString()} Kalshi · ${scan.polymarket_markets?.toLocaleString()} Polymarket markets</span><span>${scan.rejected?.toLocaleString()} set aside (no offers / bad data)</span><span>scan took ${scan.seconds}s</span>${(scan.errors||[]).map(e=>`<span class="neg">${esc(e)}</span>`).join("")}`;
+}
+async function loadScan(force){
+ try{scan=await api("/api/scan"+(force?"?force=true":""));renderScan();renderStatus();if(force)toast("Refresh started. New prices appear in about 30 seconds.")}
+ catch(e){$("status").innerHTML=`<span class="neg">Could not reach the ArbLens server: ${esc(e.message)}. Is it running? (python -m uvicorn arblens.server:app)</span>`}
+}
+["q","view","minE","minS","sort","hideRej"].forEach(i=>$(i).addEventListener("input",renderScan));
+$("refresh").addEventListener("click",()=>loadScan(true));
+$("rows").addEventListener("click",e=>{const r=e.target.closest(".row");if(r){openPair(r.dataset.k);location.hash="pair"}});
+setInterval(()=>{if($("auto").checked)loadScan(false);else renderStatus()},30000);
+setInterval(renderStatus,5000);
+
+/* ---------------- pair detail ---------------- */
+function hl(text,phrases,klass){
+ let h=esc(text);
+ [...new Set(phrases)].filter(p=>p&&p.length>=3&&p!=="(not addressed)").sort((a,b)=>b.length-a.length).forEach(p=>{
+  const re=new RegExp("(?![^<]*>)"+esc(p).replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/\s+/g,"\\s+"),"i");
+  h=h.replace(re,m=>`<mark${klass?` class="${klass}"`:""}>${m}</mark>`)});
+ return h;
+}
+function bookTable(rows,side,plat){
+ if(!rows.length)return `<p class="note">No offers on this side.</p>`;
+ return `<table><thead><tr><th>${plat} ${side} ask</th><th class="num">Contracts</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${cents(r[0])}</td><td class="num">${Math.round(r[1]).toLocaleString()}</td></tr>`).join("")}</tbody></table>`;
+}
+async function openPair(key,qty){
+ selected=key;renderScan();
+ const pair=scan?.pairs.find(p=>p.key===key);
+ $("pq").textContent=pair?pair.kalshi.title:"Loading…";
+ $("psum").innerHTML=`<span class="skel">Loading live order books and rules…</span>`;
+ $("pbody").innerHTML="";
+ try{detail=await api(`/api/pair?key=${encodeURIComponent(key)}&qty=${qty||100}`)}
+ catch(e){$("psum").innerHTML=`<span class="neg">${esc(e.message)}</span>`;return}
+ $("usePair").disabled=false;
+ renderPair(pair);
+}
+function renderPair(pair){
+ const d=detail,k=d.kalshi,p=d.polymarket,best=d.directions[0];
+ const warnings=pair?.warnings||[],wd=pair?.word_diff||{};
+ $("pq").textContent=k.title;
+ const q=best.quote;
+ $("psum").innerHTML=`Polymarket: <b>${esc(p.title)}</b>. Match score ${d.score!=null?d.score.toFixed(2):"–"}. ${d.days_to_close!=null?`Closes in ${Math.ceil(d.days_to_close)} days.`:""} Kalshi fee rate ${k.fee_rate.toFixed(3)}, Polymarket ${p.fee_rate.toFixed(3)}. <a href="${esc(k.url)}" target="_blank" rel="noopener">Kalshi ↗</a> · <a href="${esc(p.url)}" target="_blank" rel="noopener">Polymarket ↗</a>`;
+ const codeFlags=d.code_check.flags,ai=d.ai_check;
+ const aiK=ai?ai.differences.filter(x=>x.verified).map(x=>x.quote_kalshi):[],aiP=ai?ai.differences.filter(x=>x.verified).map(x=>x.quote_polymarket):[];
+ const onlyK=codeFlags.flatMap(f=>f.only_kalshi),onlyP=codeFlags.flatMap(f=>f.only_polymarket);
+ const qtyNow=q?q.qty:100;
+ $("pbody").innerHTML=`
+<div class="grid2">
+ <div class="card"><h3>Is this the same question?</h3>
+  ${warnings.length?warnings.map(w=>`<div class="warn">${esc(w)}</div>`).join(""):`<p class="pos" style="margin:0 0 6px">No automatic warnings.</p>`}
+  ${(wd.kalshi?.length||wd.polymarket?.length)?`<div class="lbl" style="margin-top:8px">Words in only one title</div><div class="chips">${(wd.kalshi||[]).map(w=>`<span class="chip k">K: ${esc(w)}</span>`).join("")}${(wd.polymarket||[]).map(w=>`<span class="chip p">P: ${esc(w)}</span>`).join("")}</div>`:""}
+  <p class="note">Read both titles and rulebooks below. Only you can confirm a pair; confirmed pairs turn blue in the scanner.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+   <button class="btn good" data-rev="confirmed">${d.review==="confirmed"?"✓ Confirmed":"Same question"}</button>
+   <button class="btn bad" data-rev="rejected">${d.review==="rejected"?"✗ Rejected":"Different bet"}</button>
+   ${d.review?`<button class="btn" data-rev="clear">Clear</button>`:""}
+  </div>
+ </div>
+ <div class="card"><h3>Paper trade ticket</h3>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:8px">
+   <div><label for="tq">Contracts</label><br><input id="tq" type="number" min="1" step="1" value="${Math.round(qtyNow)||100}"></div>
+   <button class="btn" id="requote">Re-quote</button>
+  </div>
+  ${d.directions.map(x=>{const qq=x.quote;if(!qq)return `<div class="warn">${dirText(x.direction)}: no liquidity.</div>`;
+   return `<div style="border-top:1px solid var(--line);padding:8px 0">
+   <b>${dirText(x.direction,qq.kalshi.price,qq.polymarket.price)}</b>
+   <table style="margin:6px 0"><tbody>
+    <tr><td>Fills</td><td class="num">${qq.qty.toLocaleString()} contracts${qq.qty<+$("tq")?.value?" (book too thin)":""}</td></tr>
+    <tr><td>Cost of both sides</td><td class="num">${money(qq.cost)}</td></tr>
+    <tr><td>Fees (Kalshi ${money(qq.kalshi.fee)}, Polymarket ${money(qq.polymarket.fee)})</td><td class="num">${money(qq.fees)}</td></tr>
+    <tr><td>Net if held and both agree</td><td class="num ${cls(qq.net)}">${money(qq.net)} (${sgn(qq.net_per)}¢ each)</td></tr>
+    <tr><td>Return / annualized</td><td class="num">${qq.roi.toFixed(2)}% / ${qq.annualized!=null?qq.annualized.toFixed(1)+"%":"–"}</td></tr>
+    <tr><td>Max size before the edge runs out</td><td class="num">${x.max_profitable_qty.toLocaleString()} contracts</td></tr>
+   </tbody></table>
+   <button class="btn ${qq.net>0?"primary":""}" data-trade="${x.direction}">Paper buy ${qq.qty.toLocaleString()}</button>${qq.net<=0?` <span class="note">This loses money even if both agree.</span>`:""}
+   </div>`}).join("")}
+ </div>
+</div>
+<div class="grid2">
+ <div class="card"><h3>Kalshi rules</h3><p class="rules">${hl(k.rules||"(no rules text)",onlyK.concat(aiK),"")}</p></div>
+ <div class="card"><h3>Polymarket rules</h3><p class="rules">${hl(p.rules||"(no rules text)",onlyP.concat(aiP),"")}</p></div>
+</div>
+<div class="grid2">
+ <div class="card"><h3>Code check <small class="note">free, instant</small></h3>
+  ${d.code_check.missing_rules.length?`<div class="warn">Missing or very short rules on ${esc(d.code_check.missing_rules.join(" and "))}. Treat as high risk.</div>`:""}
+  ${codeFlags.length?codeFlags.map(f=>`<div class="warn"><b>${esc(f.type)}</b>: Kalshi only ${f.only_kalshi.length?f.only_kalshi.map(x=>`"${esc(x)}"`).join(", "):"–"} · Polymarket only ${f.only_polymarket.length?f.only_polymarket.map(x=>`"${esc(x)}"`).join(", "):"–"}</div>`).join(""):`<p class="pos">Same dates, times, numbers and named sources on both sides.</p>`}
+  <p class="note">Highlighted text in the rules = appears on one side only. A hint, not a verdict: wording often differs harmlessly.</p>
+ </div>
+ <div class="card"><h3>AI rules check <small class="note">${d.ai_enabled?"Claude, structured output":"off"}</small></h3>
+  <div id="aiBox">${ai?renderAI(ai):d.ai_enabled?`<p class="note">Claude reads both rulebooks and lists every way they could resolve differently, with exact quotes. Each quote is then checked in code.</p>`:`<p class="note">Add <code>ANTHROPIC_API_KEY</code> to <code>.env</code> and restart the server to turn this on. Everything else works without it.</p>`}</div>
+  <button class="btn" id="aiRun" ${d.ai_enabled?"":"disabled"}>${ai?"Run again":"Run AI rules check"}</button>
+ </div>
+</div>
+<div class="grid2">
+ <div class="card"><h3>Order book: ${esc(DIR[best.direction][1])} ${DIR[best.direction][0]}</h3>${bookTable(best.kalshi_book,DIR[best.direction][0],"Kalshi")}</div>
+ <div class="card"><h3>Order book: Polymarket ${DIR[best.direction][2]}</h3>${bookTable(best.polymarket_book,DIR[best.direction][2],"Polymarket")}</div>
+</div>`;
+}
+function renderAI(ai){
+ const col={LOW:"var(--blue)",MEDIUM:"var(--risk)",HIGH:"var(--risk)"}[ai.risk];
+ return `<p><b>Same event:</b> ${esc(ai.same_event)} · <b>Risk:</b> <span style="color:${col};font-weight:800">${esc(ai.risk)}</span>${ai.needs_human_review?` · <span class="neg">needs your review</span>`:""}</p><p>${esc(ai.reason)}</p>
+ ${ai.differences.map(x=>`<div class="warn"><b>${esc(x.type)}</b>: "${esc(x.quote_kalshi)}" vs "${esc(x.quote_polymarket)}"<br>${esc(x.why_it_matters)}<br>${x.verified?`<span class="pos">Quotes found in source</span>`:`<span class="neg">Quote not found in source: don't trust this line</span>`}</div>`).join("")}
+ <p class="note">${esc(ai.model||"")} · prompt ${esc(ai.prompt_version||"")}${ai.cached?" · cached":""}</p>`;
+}
+$("pbody").addEventListener("click",async e=>{
+ const b=e.target.closest("button");if(!b||!detail)return;
+ const key=detail.key,pair=scan?.pairs.find(p=>p.key===key);
+ if(b.dataset.rev){
+  await api(`/api/pair/review?key=${encodeURIComponent(key)}`,{method:"POST",body:JSON.stringify({verdict:b.dataset.rev})});
+  detail.review=b.dataset.rev==="clear"?null:b.dataset.rev;if(pair)pair.review=detail.review;renderPair(pair);renderScan();
+ }else if(b.id==="requote"){openPair(key,+$("tq").value||100)}
+ else if(b.dataset.trade){
+  const qty=+$("tq").value||100;b.disabled=true;
+  try{const r=await api("/api/paper/trade",{method:"POST",body:JSON.stringify({pair_key:key,direction:b.dataset.trade,qty})});
+   toast(`Paper position #${r.position_id} opened: ${r.filled_qty} contracts${r.partial?` (only ${r.filled_qty} of ${qty} available)`:""}.`);loadPaper()}
+  catch(err){toast(err.message,true)}finally{b.disabled=false}
+ }else if(b.id==="aiRun"){
+  b.disabled=true;$("aiBox").innerHTML=`<p class="skel">Claude is reading both rulebooks…</p>`;
+  try{detail.ai_check=await api(`/api/pair/ai-check?key=${encodeURIComponent(key)}${detail.ai_check?"&force=true":""}`,{method:"POST"});renderPair(pair)}
+  catch(err){$("aiBox").innerHTML=`<p class="neg">${esc(err.message)}</p>`;b.disabled=false}
+ }
+});
+
+/* ---------------- paper portfolio ---------------- */
+async function loadPaper(){
+ let d;try{d=await api("/api/paper")}catch(e){$("openT").innerHTML=`<tr><td colspan="7" class="neg">${esc(e.message)}</td></tr>`;return}
+ const a=d.account,heldPnl=d.equity_if_held-a.starting_cash,nowPnl=d.equity_if_sold_now-a.starting_cash;
+ $("pk").innerHTML=`<div class="kpi"><div class="n">${money(a.cash)}</div><div class="l">cash (started ${money(a.starting_cash)})</div></div><div class="kpi"><div class="n ${cls(nowPnl)}">${money(d.equity_if_sold_now)}</div><div class="l">value if you sold everything now</div></div><div class="kpi key"><div class="n">${money(d.equity_if_held)}</div><div class="l">value if held and platforms agree</div></div><div class="kpi"><div class="n ${cls(d.realized_pnl)}">${money(d.realized_pnl)}</div><div class="l">realized profit / loss</div></div>`;
+ $("openT").innerHTML=d.open.length?d.open.map(p=>{const sell=p.exit.value,held=p.hold_value;
+  return `<tr><td>${esc(p.title)}<br><span class="note">#${p.id} · opened ${esc(p.opened_at.slice(0,16).replace("T"," "))}</span></td><td>Kalshi ${p.k_side.toUpperCase()} @ ${cents(p.k_price)}<br>Polymarket ${p.p_side.toUpperCase()} @ ${cents(p.p_price)}</td><td class="num">${p.qty.toLocaleString()}</td><td class="num">${money(p.outlay)}</td><td class="num">${sell==null?`<span class="note">${esc(p.exit.error||"–")}</span>`:`${money(sell)}<br><span class="${cls(sell-p.outlay)}">${money(sell-p.outlay)}</span>`}</td><td class="num">${money(held)}<br><span class="${cls(held-p.outlay)}">${money(held-p.outlay)}</span></td><td><button class="btn" data-close="${p.id}" ${p.exit.fully_sellable?"":"disabled title='Not enough bids to sell the whole position'"}>Sell both</button></td></tr>`}).join("")
+  :`<tr><td colspan="7" class="note">No open positions. Open a pair above and press "Paper buy".</td></tr>`;
+ $("histT").innerHTML=d.closed.length?d.closed.map(p=>`<tr><td>${esc(p.title)}<br><span class="note">#${p.id} · ${esc(p.status)} ${esc((p.closed_at||"").slice(0,10))}</span></td><td>${esc(p.note||"")}</td><td class="num">${money(p.outlay)}</td><td class="num">${money(p.proceeds)}</td><td class="num ${cls(p.pnl)}">${money(p.pnl)}</td></tr>`).join(""):`<tr><td colspan="5" class="note">Nothing closed yet.</td></tr>`;
+}
+$("openT").addEventListener("click",async e=>{const b=e.target.closest("[data-close]");if(!b)return;
+ if(!confirm("Sell both legs at the current bids?"))return;b.disabled=true;
+ try{const r=await api(`/api/paper/${b.dataset.close}/close`,{method:"POST"});toast(`Sold. P&L ${money(r.pnl)}.`);loadPaper()}catch(err){toast(err.message,true);b.disabled=false}});
+$("settle").addEventListener("click",async()=>{try{const r=await api("/api/paper/settle",{method:"POST"});const s=r.results.filter(x=>x.status==="settled");toast(s.length?`${s.length} position(s) settled.`:`No positions have resolved on both platforms yet.`);loadPaper()}catch(e){toast(e.message,true)}});
+$("preload").addEventListener("click",loadPaper);
+$("reset").addEventListener("click",async()=>{const v=prompt("Start over with how much paper cash?","1000");if(v==null)return;const n=parseFloat(v);if(!(n>0)){toast("Enter a positive number",true);return}
+ await api("/api/paper/reset",{method:"POST",body:JSON.stringify({starting_cash:n})});toast("Paper account reset.");loadPaper()});
+
+/* ---------------- calculator ---------------- */
+const ids=["pa","pb","qty","days","kr","pr","slip","minC"],defaults={pa:41,pb:56,qty:100,days:27,kr:0.07,pr:0.05,slip:0,minC:0.5};
+const ceilC=x=>Math.ceil(Math.round(x*1e6)/1e4)/100;
+function runCalc(){
+ const v=Object.fromEntries(ids.map(i=>[i,Math.max(0,parseFloat($(i).value)||0)]));
+ const q=Math.max(1,Math.round(v.qty)),a=Math.min(99,v.pa)/100,b=Math.min(99,v.pb)/100;
+ const cost=(a+b)*q,kFee=ceilC(v.kr*q*a*(1-a)),pFee=Math.round(q*v.pr*b*(1-b)*1e5)/1e5,slip=v.slip/100*q;
+ const net=q-cost-kFee-pFee-slip,per=net/q*100,out=cost+kFee+pFee,roi=out>0?net/out*100:0,ann=roi*365/Math.max(1,v.days);
+ $("netBig").textContent=money(net);
+ $("verdict").innerHTML=a+b>=1?`<b class="neg">No gap.</b> The two prices add up to ${((a+b)*100).toFixed(1)}¢, so buying both costs at least the $1 payout.`:per>=v.minC?`<b class="pos">Clears the ${v.minC}¢ minimum.</b> Next check: do the two rulebooks match?`:`<b class="neg">Below the ${v.minC}¢ minimum.</b> The gap disappears after fees.`;
+ const rows=[["Payout",q,"var(--ink)"],["Cost of both sides",-cost,"var(--slate)"],["Kalshi fee",-kFee,"var(--risk)"],["Polymarket fee",-pFee,"var(--risk)"],["Slippage",-slip,"var(--risk)"],["Net profit",net,net>=0?"var(--blue)":"var(--risk)"]];
+ const mx=Math.max(...rows.map(r=>Math.abs(r[1])),1);
+ $("water").innerHTML=rows.map(r=>`<div class="wrow"><span>${r[0]}</span><span><span class="wbar" style="display:block;width:${Math.max(.5,Math.abs(r[1])/mx*100)}%;background:${r[2]}"></span></span><span class="v">${money(r[1])}</span></div>`).join("");
+ $("mtab").innerHTML=[["Gross gap per contract",`${((1-a-b)*100).toFixed(1)}¢`],["Net edge per contract",`${per.toFixed(2)}¢`],["Return on money put in",`${roi.toFixed(2)}%`],[`Annualized (held ${Math.round(v.days)} days)`,`${ann.toFixed(1)}%`]].map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("");
+}
+ids.forEach(i=>$(i).addEventListener("input",runCalc));
+$("resetCalc").addEventListener("click",()=>{ids.forEach(i=>$(i).value=defaults[i]);runCalc()});
+$("usePair").addEventListener("click",()=>{if(!detail)return;const x=detail.directions[0].quote;if(!x)return;
+ $("pa").value=(x.kalshi.price*100).toFixed(1);$("pb").value=(x.polymarket.price*100).toFixed(1);$("qty").value=Math.round(x.qty);
+ $("days").value=Math.max(1,Math.ceil(detail.days_to_close||30));$("kr").value=detail.kalshi.fee_rate;$("pr").value=detail.polymarket.fee_rate;runCalc();location.hash="calc"});
+runCalc();
+
+/* ---------------- how it works ---------------- */
+const flow=[["code","Fetch","~30k open markets from each platform's public API"],["code","Validate","Pydantic checks each row; markets with no offers are set aside"],["code","Match","TF-IDF title similarity, then number, date and price guards"],["you","Confirm","You decide: same question, or a different bet"],["code","Price","Walk both order books; real fee formula per platform"],["ai","Compare rules","Code diff of dates and numbers; optional Claude check"],["code","Verify","Every AI quote checked against the source text"],["code","Paper trade","Fake money, real fills, settles when both resolve"]];
+$("flow").innerHTML=flow.map(f=>`<div class="stn"><span class="who ${f[0]}">${f[0]==="ai"?"AI":f[0]==="you"?"You":"Code"}</span><b>${f[1]}</b><p>${f[2]}</p></div>`).join("");
+
+loadScan(false);loadPaper();
+}
+</script>
+</body>
+</html>
