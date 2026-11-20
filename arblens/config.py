@@ -38,6 +38,8 @@ class Settings:
 
     # A scan older than this is refreshed on the next request.
     scan_ttl_seconds: int = int(os.getenv("ARBLENS_SCAN_TTL", "90"))
+    # Kalshi event-title lookups per scan (each is a rate-limited call; results are cached).
+    event_lookups_per_scan: int = int(os.getenv("ARBLENS_EVENT_LOOKUPS", "60"))
     # Minimum text-similarity score (0-1) for two markets to be shown as a candidate pair.
     min_match_score: float = float(os.getenv("ARBLENS_MIN_MATCH", "0.45"))
 
@@ -53,6 +55,10 @@ class Settings:
     # Optional AI rules check. Leave ANTHROPIC_API_KEY unset to run without it.
     ai_model: str = os.getenv("ARBLENS_AI_MODEL", "claude-opus-5-5")
     ai_enabled: bool = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+
+    # Serverless (Vercel): a function is frozen as soon as it returns a response, so background
+    # tasks never finish. Scans must run inside the request that asks for them.
+    serverless: bool = bool(os.getenv("VERCEL"))
 
 
 settings = Settings()

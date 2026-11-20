@@ -1,0 +1,12 @@
+{
+  "name": "arblens",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Kalshi vs Polymarket price-gap scanner with paper trading. The app is Python; these scripts just run it.",
+  "scripts": {
+    "setup": "python -m pip install -r requirements.txt",
+    "dev": "python -m uvicorn arblens.server:app --reload --port 8000",
+    "start": "python -m uvicorn arblens.server:app --port 8000",
+    "test": "python -m pytest -q -p no:cacheprovider"
+  }
+}

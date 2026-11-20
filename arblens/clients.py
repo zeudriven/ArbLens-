@@ -39,20 +39,46 @@ def _price(v: Optional[float]) -> Optional[float]:
     return v if v is not None and 0 < v < 1 else None
 
 
+class RateLimiter:
+    """Spaces requests out so a burst of parallel calls stays under a host's limit."""
+
+    def __init__(self, per_second: float):
+        self.interval = 1 / per_second
+        self.next_at = 0.0
+        self.lock = asyncio.Lock()
+
+    async def wait(self) -> None:
+        async with self.lock:
+            now = time.monotonic()
+            delay = self.next_at - now
+            self.next_at = max(now, self.next_at) + self.interval
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+
+# Kalshi's public tier documents ~20 reads per second, but bursts of 12/s still drew 429s in testing.
+_limiters = {"api.elections.kalshi.com": RateLimiter(8)}
+
+
 async def get_json(client: httpx.AsyncClient, url: str, params: dict | None = None, tries: int = 3) -> Any:
-    """GET with retry and backoff for rate limits and server errors."""
+    """GET with rate limiting, and retry with backoff for 429s and server errors."""
+    limiter = next((lim for host, lim in _limiters.items() if host in url), None)
     delay = 0.5
     for attempt in range(tries):
+        if limiter:
+            await limiter.wait()
         try:
             r = await client.get(url, params=params, headers=HEADERS, timeout=20)
             r.raise_for_status()
             return r.json()
         except (httpx.HTTPStatusError, httpx.TransportError) as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
+            resp = getattr(e, "response", None)
+            status = getattr(resp, "status_code", None)
             retryable = status is None or status == 429 or status >= 500
             if attempt == tries - 1 or not retryable:
                 raise
-            await asyncio.sleep(delay)
+            retry_after = _f(resp.headers.get("retry-after")) if resp is not None else None
+            await asyncio.sleep(retry_after if retry_after is not None else delay)
             delay *= 2
 
 
@@ -101,14 +127,46 @@ async def fetch_kalshi(client: httpx.AsyncClient) -> tuple[list[Market], list[Re
     so they make poor arbs even when the gap is real."""
     markets: list[Market] = []
     rejected: list[Rejected] = []
-    cursor: str | None = None
-    max_close = int(time.time()) + settings.horizon_days * 86400
-    for _ in range(settings.kalshi_pages):
-        params = {"status": "open", "limit": 1000, "mve_filter": "exclude", "max_close_ts": max_close}
-        if cursor:
-            params["cursor"] = cursor
-        data = await get_json(client, f"{settings.kalshi_base}/markets", params)
-        for m in data.get("markets", []):
+    now = int(time.time())
+    # Kalshi pages with a cursor, so one stream is sequential (~7 s for 30k markets). Splitting the
+    # horizon into closing-date windows lets several streams run at once.
+    edges = [d for d in (0, 3, 10, 30, 75) if d < settings.horizon_days] + [settings.horizon_days]
+    windows = [(now + a * 86400, now + b * 86400) for a, b in zip(edges, edges[1:])]
+    pages_each = max(2, settings.kalshi_pages // len(windows))
+
+    async def stream(lo: int, hi: int) -> list[dict]:
+        rows: list[dict] = []
+        cursor: str | None = None
+        for _ in range(pages_each):
+            params = {"status": "open", "limit": 1000, "mve_filter": "exclude",
+                      "min_close_ts": lo, "max_close_ts": hi}
+            if cursor:
+                params["cursor"] = cursor
+            try:
+                data = await get_json(client, f"{settings.kalshi_base}/markets", params, tries=4)
+            except httpx.HTTPError as e:
+                if not rows:
+                    raise
+                log.warning("Kalshi window stopped early after %s markets: %s", len(rows), e)
+                break  # keep what this window already fetched
+            rows.extend(data.get("markets", []))
+            cursor = data.get("cursor")
+            if not cursor:
+                break
+        return rows
+
+    results = await asyncio.gather(*(stream(lo, hi) for lo, hi in windows), return_exceptions=True)
+    failed = [r for r in results if isinstance(r, Exception)]
+    if failed and len(failed) == len(results):
+        raise failed[0]
+    for e in failed:
+        rejected.append(Rejected(platform="kalshi", id="(window)", reason=f"fetch failed: {str(e)[:150]}"))
+    seen: set[str] = set()
+    for rows in (r for r in results if not isinstance(r, Exception)):
+        for m in rows:
+            if m.get("ticker") in seen:
+                continue
+            seen.add(m.get("ticker"))
             if m.get("market_type", "binary") != "binary" or m.get("mve_collection_ticker"):
                 continue  # skip multi-leg combo products
             try:
@@ -120,9 +178,6 @@ async def fetch_kalshi(client: httpx.AsyncClient) -> tuple[list[Market], list[Re
                 rejected.append(Rejected(platform="kalshi", id=mk.id, reason="no offers on either side"))
                 continue
             markets.append(mk)
-        cursor = data.get("cursor")
-        if not cursor:
-            break
     return markets, rejected
 
 

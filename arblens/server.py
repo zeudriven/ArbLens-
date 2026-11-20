@@ -64,10 +64,18 @@ async def run_scan() -> None:
                 except Exception:  # noqa: BLE001
                     return t, {}
 
-        generic = {p.kalshi.event for p in pairs if clients.needs_event_title(p.kalshi)}
-        events = dict(await asyncio.gather(*(event(t) for t in generic if t)))
+        # Each lookup is one rate-limited Kalshi call, so cap them per scan (cached ones are free).
+        # Pairs that look profitable go first; the rest fill in over later scans.
+        need = [p for p in pairs if clients.needs_event_title(p.kalshi) and p.kalshi.event]
+        need.sort(key=lambda p: -(p.best.net_per if p.best else -999))
+        uncached = [t for t in dict.fromkeys(p.kalshi.event for p in need) if t not in clients._event_cache]
+        to_fetch = set(uncached[:settings.event_lookups_per_scan])
+        wanted = {p.kalshi.event for p in need if p.kalshi.event in clients._event_cache} | to_fetch
+        events = dict(await asyncio.gather(*(event(t) for t in wanted)))
         kept = []
         for p in pairs:
+            if clients.needs_event_title(p.kalshi) and not events.get(p.kalshi.event or ""):
+                p.warnings.append("Kalshi title lacks its event name (not loaded yet); check what YES means")
             if p.kalshi.event in events and events[p.kalshi.event]:
                 clients.with_event(p.kalshi, events[p.kalshi.event])
                 score = idx.similarity(p.kalshi.match_text, p.polymarket.match_text)
@@ -78,18 +86,10 @@ async def run_scan() -> None:
             kept.append(p)
         pairs = kept
 
-        # Real Kalshi fee multiplier per series, only for the series we actually matched.
-        async def rate(s: str) -> tuple[str, float]:
-            async with sem:
-                return s, await clients.kalshi_fee_rate(c, s)
-
-        rates = dict(await asyncio.gather(*(rate(s) for s in {p.kalshi.series for p in pairs if p.kalshi.series})))
-
+    # The scanner prices every Kalshi leg at the standard 0.07 rate. Looking up each series' exact
+    # multiplier took hundreds of calls (~10 s), so that happens only when you open a pair.
     reviews = ledger.reviews()
     for p in pairs:
-        p.kalshi.fee_rate = rates.get(p.kalshi.series or "", settings.kalshi_base_fee_rate)
-        p.quotes = quote_top_of_book(p.kalshi, p.polymarket)
-        p.best = p.quotes[0] if p.quotes else None
         p.review = reviews.get(p.key)
 
     _scan.update(
@@ -116,34 +116,49 @@ async def _locked_scan() -> None:
             _scan["meta"] = {**_scan.get("meta", {}), "errors": [f"Scan failed: {e}"]}
 
 
+async def _await_scan() -> None:
+    """Run a scan in this request, or wait for the one already running."""
+    if _scan_lock.locked():
+        async with _scan_lock:
+            return
+    await _locked_scan()
+
+
 async def ensure_scan(force: bool = False) -> None:
-    """First scan blocks. After that, stale or forced scans refresh in the background
-    and the last good result is served meanwhile."""
-    if not _scan["at"]:
-        if _scan_lock.locked():
-            async with _scan_lock:  # wait for the scan already in progress
-                return
-        await _locked_scan()
-        return
-    if force or time.time() - _scan["at"] > settings.scan_ttl_seconds:
+    stale = force or time.time() - _scan["at"] > settings.scan_ttl_seconds
+    if not _scan["at"] or (stale and settings.serverless):
+        # No data yet, or on Vercel where background work is frozen: scan inside this request.
+        await _await_scan()
+    elif stale:
+        # Long-running server: serve the last scan now, refresh in the background.
         asyncio.create_task(_locked_scan())
 
 
 @app.on_event("startup")
 async def _warm() -> None:
-    asyncio.create_task(_locked_scan())
+    if not settings.serverless:
+        asyncio.create_task(_locked_scan())
 
 
 def _summary(p: Pair) -> dict:
-    return p.model_dump(mode="json", exclude={"kalshi": {"rules"}, "polymarket": {"rules"}})
+    """Just what the scanner table needs (Vercel caps responses at 4.5 MB).
+    Full pair data loads on demand from /api/pair."""
+    b = p.best
+    return {
+        "key": p.key, "score": p.score, "review": p.review, "warnings": p.warnings, "word_diff": p.word_diff,
+        "days_to_close": round(p.days_to_close, 1) if p.days_to_close is not None else None,
+        "kalshi": {"title": p.kalshi.title}, "polymarket": {"title": p.polymarket.title},
+        "best": {"direction": b.direction, "gross_per": b.gross_per, "net_per": b.net_per,
+                 "annualized": b.annualized, "max_qty": b.max_qty},
+    }
 
 
 @app.get("/api/scan")
 async def scan(force: bool = False) -> dict:
     await ensure_scan(force)
-    pairs = sorted(_scan["pairs"].values(), key=lambda p: (p.best.net_per if p.best else -999), reverse=True)
+    pairs = sorted((p for p in _scan["pairs"].values() if p.best), key=lambda p: p.best.net_per, reverse=True)
     return {"updated_at": _scan["at"], "ttl": settings.scan_ttl_seconds, "scanning": _scan_lock.locked(),
-            **_scan["meta"], "pairs": [_summary(p) for p in pairs]}
+            "serverless": settings.serverless, **_scan["meta"], "pairs": [_summary(p) for p in pairs]}
 
 
 # --------------------------------------------------------------------------- pair detail
@@ -353,8 +368,36 @@ async def paper_reset(body: ResetRequest = Body(default_factory=ResetRequest)) -
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True, "ai_enabled": settings.ai_enabled, "ai_model": settings.ai_model if settings.ai_enabled else None,
-            "scan_age_seconds": round(time.time() - _scan["at"]) if _scan["at"] else None}
+    """Pings each data source so you can see which API is up, how fast, and a sample market."""
+    checks = {
+        "kalshi": (f"{settings.kalshi_base}/markets", {"status": "open", "limit": 1, "mve_filter": "exclude"}),
+        "polymarket_gamma": (f"{settings.gamma_base}/markets", {"active": "true", "closed": "false", "limit": 1}),
+        "polymarket_clob": (f"{settings.clob_base}/time", None),
+    }
+
+    async def ping(c: httpx.AsyncClient, url: str, params: dict | None) -> dict:
+        t = time.time()
+        try:
+            r = await c.get(url, params=params, headers=clients.HEADERS, timeout=10)
+            out: dict[str, Any] = {"ok": r.is_success, "status": r.status_code, "ms": round((time.time() - t) * 1000)}
+            if r.is_success and "markets" in url:
+                body = r.json()
+                m = (body.get("markets") or [{}])[0] if isinstance(body, dict) else (body or [{}])[0]
+                out["sample"] = m.get("ticker") or m.get("question")
+            return out
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)[:160], "ms": round((time.time() - t) * 1000)}
+
+    async with _client() as c:
+        results = await asyncio.gather(*(ping(c, u, p) for u, p in checks.values()))
+    return {
+        "ok": all(r["ok"] for r in results),
+        "sources": dict(zip(checks, results)),
+        "ai_enabled": settings.ai_enabled,
+        "serverless": settings.serverless,
+        "scan_age_seconds": round(time.time() - _scan["at"]) if _scan["at"] else None,
+        "last_scan": {k: v for k, v in _scan.get("meta", {}).items() if k != "rejected_sample"},
+    }
 
 
 @app.get("/")

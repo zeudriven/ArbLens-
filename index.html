@@ -279,23 +279,32 @@ function renderScan(){
   const clipR=b.gross_per>hi?`<span class="clip" style="right:-2px">▸</span>`:"";
   return `<button class="row${p.key===selected?" on":""}" data-k="${esc(p.key)}"><span class="q">${esc(p.kalshi.title)}<small>${esc(p.polymarket.title)} · match ${p.score.toFixed(2)}${p.days_to_close!=null?" · "+Math.ceil(p.days_to_close)+"d":""}</small></span><span class="track"><span class="axis0" style="left:${pos(0)}%"></span><span class="bar" style="left:${l}%;width:${w}%"></span><span class="gross" style="left:${g}%" title="Gross ${b.gross_per.toFixed(1)}¢"></span><span class="net" style="left:${n}%;background:${v.c}" title="Net ${b.net_per.toFixed(2)}¢"></span>${clipR}</span><span class="vals"><b class="${cls(b.net_per)}">${sgn(b.net_per)}¢</b>${b.annualized!=null&&b.net_per>0?` <span class="note">${b.annualized>999?">999":b.annualized.toFixed(0)}%/yr</span>`:""}<br><span class="tag${v.o?" outline":""}" style="background:${v.c};color:${v.o?v.c:"#fff"}">${v.t}</span></span></button>`}).join("")
   :`<div class="empty">No pairs match these filters. Try "All candidates" or a lower match score.</div>`;
- $("shown").textContent=`Showing ${shown.length} of ${list.length} pairs after filters. Prices are best bid/ask from the last scan; open a pair for live order books. Not financial advice.`;
+ $("shown").textContent=`Showing ${shown.length} of ${list.length} pairs after filters. Scanner prices are best bid/ask from the last scan, with Kalshi's standard 0.07 fee rate; open a pair for live order books and that series' exact fee. Not financial advice.`;
 }
+let loading=false,sources=null;
 function renderStatus(){
- if(!scan)return;
+ const el=$("status"),busy=loading||(scan&&scan.scanning);
+ el.classList.toggle("scanning",!!busy);
+ const src=sources?Object.entries(sources.sources).map(([n,s])=>`<span class="${s.ok?"":"neg"}">${{kalshi:"Kalshi API",polymarket_gamma:"Polymarket markets API",polymarket_clob:"Polymarket order books"}[n]||n} ${s.ok?"✓ "+s.ms+"ms":"✗ "+esc(s.error||("HTTP "+s.status))}</span>`).join(""):"";
+ if(!scan){el.innerHTML=`<span><span class="pulse"></span>${loading?"Scanning both platforms (about 15 to 30 seconds)…":"Waiting for the first scan…"}</span>${src}`;return}
  const age=Math.round(Date.now()/1000-scan.updated_at);
- const el=$("status");el.classList.toggle("scanning",!!scan.scanning);
- el.innerHTML=`<span><span class="pulse"></span>${scan.scanning?"Refreshing in background… ":""}Updated ${age<60?age+"s":Math.round(age/60)+"m"} ago</span><span>${scan.kalshi_markets?.toLocaleString()} Kalshi · ${scan.polymarket_markets?.toLocaleString()} Polymarket markets</span><span>${scan.rejected?.toLocaleString()} set aside (no offers / bad data)</span><span>scan took ${scan.seconds}s</span>${(scan.errors||[]).map(e=>`<span class="neg">${esc(e)}</span>`).join("")}`;
+ el.innerHTML=`<span><span class="pulse"></span>${busy?"Refreshing… ":""}Updated ${age<60?age+"s":Math.round(age/60)+"m"} ago</span><span>${scan.kalshi_markets?.toLocaleString()} Kalshi · ${scan.polymarket_markets?.toLocaleString()} Polymarket markets</span><span>${scan.rejected?.toLocaleString()} set aside (no offers / bad data)</span><span>scan took ${scan.seconds}s</span>${src}${(scan.errors||[]).map(e=>`<span class="neg">${esc(e)}</span>`).join("")}`;
 }
 async function loadScan(force){
- try{scan=await api("/api/scan"+(force?"?force=true":""));renderScan();renderStatus();if(force)toast("Refresh started. New prices appear in about 30 seconds.")}
- catch(e){$("status").innerHTML=`<span class="neg">Could not reach the ArbLens server: ${esc(e.message)}. Is it running? (python -m uvicorn arblens.server:app)</span>`}
+ if(loading)return;  // one scan request at a time
+ loading=true;$("refresh").disabled=true;$("refresh").textContent=force?"Refreshing…":"Refresh now";renderStatus();
+ const before=scan?.updated_at;
+ try{scan=await api("/api/scan"+(force?"?force=true":""));renderScan();if(force)toast(scan.updated_at!==before?`Updated: ${scan.pairs.length.toLocaleString()} pairs, live prices.`:"Already up to date.")}
+ catch(e){toast("Scan failed: "+e.message,true);if(!scan)$("rows").innerHTML=`<div class="empty neg">Could not load data: ${esc(e.message)}</div>`}
+ finally{loading=false;$("refresh").disabled=false;$("refresh").textContent="Refresh now";renderStatus()}
 }
+async function loadHealth(){try{sources=await api("/api/health");renderStatus()}catch(e){sources=null}}
 ["q","view","minE","minS","sort","hideRej"].forEach(i=>$(i).addEventListener("input",renderScan));
 $("refresh").addEventListener("click",()=>loadScan(true));
 $("rows").addEventListener("click",e=>{const r=e.target.closest(".row");if(r){openPair(r.dataset.k);location.hash="pair"}});
-setInterval(()=>{if($("auto").checked)loadScan(false);else renderStatus()},30000);
+setInterval(()=>{if($("auto").checked)loadScan(false);else renderStatus()},60000);
 setInterval(renderStatus,5000);
+setInterval(loadHealth,120000);
 
 /* ---------------- pair detail ---------------- */
 function hl(text,phrases,klass){
@@ -309,8 +318,17 @@ function bookTable(rows,side,plat){
  if(!rows.length)return `<p class="note">No offers on this side.</p>`;
  return `<table><thead><tr><th>${plat} ${side} ask</th><th class="num">Contracts</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${cents(r[0])}</td><td class="num">${Math.round(r[1]).toLocaleString()}</td></tr>`).join("")}</tbody></table>`;
 }
+/* While a pair is open and on screen, re-quote it every 10 s so prices stay live. */
+let liveTimer=null;
+function startLive(){clearInterval(liveTimer);liveTimer=setInterval(async()=>{
+ if(!detail||document.hidden||!$("liveQ")?.checked)return;
+ const r=$("pair").getBoundingClientRect();if(r.bottom<0||r.top>innerHeight)return;  // only when visible
+ if(document.activeElement?.id==="tq")return;  // don't fight the user while typing
+ try{const key=detail.key,qty=+$("tq")?.value||100;const d=await api(`/api/pair?key=${encodeURIComponent(key)}&qty=${qty}`);
+  if(detail&&detail.key===key){d.ai_check=d.ai_check||detail.ai_check;detail=d;renderPair(scan?.pairs.find(p=>p.key===key))}}catch{}
+},10000)}
 async function openPair(key,qty){
- selected=key;renderScan();
+ selected=key;renderScan();startLive();
  const pair=scan?.pairs.find(p=>p.key===key);
  $("pq").textContent=pair?pair.kalshi.title:"Loading…";
  $("psum").innerHTML=`<span class="skel">Loading live order books and rules…</span>`;
@@ -346,7 +364,9 @@ function renderPair(pair){
   <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:8px">
    <div><label for="tq">Contracts</label><br><input id="tq" type="number" min="1" step="1" value="${Math.round(qtyNow)||100}"></div>
    <button class="btn" id="requote">Re-quote</button>
+   <div class="chk"><input id="liveQ" type="checkbox" ${window._liveOff?"":"checked"}><label for="liveQ">Live (every 10s)</label></div>
   </div>
+  <p class="note" style="margin:0 0 6px">Quoted ${new Date().toLocaleTimeString()} from live order books.</p>
   ${d.directions.map(x=>{const qq=x.quote;if(!qq)return `<div class="warn">${dirText(x.direction)}: no liquidity.</div>`;
    return `<div style="border-top:1px solid var(--line);padding:8px 0">
    <b>${dirText(x.direction,qq.kalshi.price,qq.polymarket.price)}</b>
@@ -388,6 +408,7 @@ function renderAI(ai){
  ${ai.differences.map(x=>`<div class="warn"><b>${esc(x.type)}</b>: "${esc(x.quote_kalshi)}" vs "${esc(x.quote_polymarket)}"<br>${esc(x.why_it_matters)}<br>${x.verified?`<span class="pos">Quotes found in source</span>`:`<span class="neg">Quote not found in source: don't trust this line</span>`}</div>`).join("")}
  <p class="note">${esc(ai.model||"")} · prompt ${esc(ai.prompt_version||"")}${ai.cached?" · cached":""}</p>`;
 }
+$("pbody").addEventListener("change",e=>{if(e.target.id==="liveQ")window._liveOff=!e.target.checked});
 $("pbody").addEventListener("click",async e=>{
  const b=e.target.closest("button");if(!b||!detail)return;
  const key=detail.key,pair=scan?.pairs.find(p=>p.key===key);
@@ -451,7 +472,7 @@ runCalc();
 const flow=[["code","Fetch","~30k open markets from each platform's public API"],["code","Validate","Pydantic checks each row; markets with no offers are set aside"],["code","Match","TF-IDF title similarity, then number, date and price guards"],["you","Confirm","You decide: same question, or a different bet"],["code","Price","Walk both order books; real fee formula per platform"],["ai","Compare rules","Code diff of dates and numbers; optional Claude check"],["code","Verify","Every AI quote checked against the source text"],["code","Paper trade","Fake money, real fills, settles when both resolve"]];
 $("flow").innerHTML=flow.map(f=>`<div class="stn"><span class="who ${f[0]}">${f[0]==="ai"?"AI":f[0]==="you"?"You":"Code"}</span><b>${f[1]}</b><p>${f[2]}</p></div>`).join("");
 
-loadScan(false);loadPaper();
+loadHealth();loadScan(false);loadPaper();
 }
 </script>
 </body>

@@ -1,0 +1,5 @@
+# package.json only holds local npm shortcuts for the Python app. Keep it out of Vercel so the
+# FastAPI preset isn't mistaken for a Node build.
+package.json
+tests/
+data/
